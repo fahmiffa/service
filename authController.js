@@ -8,6 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 const register = async (req, res) => {
   try {
     let { username, email, password, phone } = req.body;
+    console.log("Registration attempt:", { username, email, phone });
     username = username?.trim();
     email = email?.trim();
 
@@ -63,10 +64,23 @@ const login = async (req, res) => {
     }
 
     // Cek status akun
+    console.log("Found user for login:", {
+      id: user.id,
+      phone: user.phone,
+      status: user.status,
+      statusType: typeof user.status,
+    });
+
     if (user.status !== 1) {
+      console.log(
+        "Login blocked: status is not 1. Actual status:",
+        user.status,
+      );
       return res
         .status(403)
-        .json({ message: "Akun Anda tidak aktif. Hubungi admin." });
+        .json({
+          message: `Akun Anda tidak aktif (Status: ${user.status}). Hubungi admin.`,
+        });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
