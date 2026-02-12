@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  phone     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Class {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  students  Student[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Student {
+  id        Int          @id @default(autoincrement())
+  name      String
+  nis       String       @unique
+  rfid      String?      @unique
+  classId   Int
+  class     Class        @relation(fields: [classId], references: [id])
+  attendances Attendance[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Attendance {
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  student   Student  @relation(fields: [studentId], references: [id])
+  status    String   // "masuk" or "pulang"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

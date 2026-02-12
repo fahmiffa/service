@@ -1,18 +1,29 @@
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
 const path = require("path");
 const routes = require("./apiRoutes");
+const authRoutes = require("./authRoutes");
+const schoolRoutes = require("./schoolRoutes");
+require("dotenv").config();
 
 const app = express();
 
+// Middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+});
 app.use(cors({ origin: "*", methods: ["GET", "POST"], credentials: true }));
-app.use(bodyParser.json());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
+// Routes
 app.use("/api", routes);
+app.use("/api/auth", authRoutes);
+app.use("/api", schoolRoutes);
 
-app.get("/", (req, res) => {
+app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 

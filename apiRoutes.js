@@ -11,16 +11,27 @@ router.post(
     body("message").notEmpty(),
     body("to").notEmpty(),
   ],
-  controller.sendMessage
+  controller.sendMessage,
 );
 
 router.post(
   "/number",
+  [body("number").notEmpty(), body("to").notEmpty()],
+  controller.numberCheck,
+);
+
+router.post(
+  "/broadcast",
   [
     body("number").notEmpty(),
-    body("to").notEmpty(),
+    body("message").notEmpty(),
+    body("recipients").isArray({ min: 1 }),
   ],
-  controller.numberCheck
+  controller.broadcastMessage,
 );
+
+router.post("/logout", [body("number").notEmpty()], controller.logout);
+
+router.get("/status/:number", controller.getStatus);
 
 module.exports = router;

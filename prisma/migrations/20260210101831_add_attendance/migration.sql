@@ -1,0 +1,9 @@
+-- CreateTable
+CREATE TABLE "Attendance" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "studentId" INTEGER NOT NULL,
+    "status" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Attendance_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);

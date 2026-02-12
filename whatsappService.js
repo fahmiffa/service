@@ -3,114 +3,119 @@ const {
   DisconnectReason,
   useMultiFileAuthState,
 } = require("@whiskeysockets/baileys");
-
 const qrcode = require("qrcode");
 const fs = require("fs");
 const path = require("path");
 const pino = require("pino");
 
 const sessions = new Map();
+const logger = pino({ level: "fatal" });
 
 async function createSession(deviceId, io) {
-  const sessionPath = path.join(__dirname, ".", "sessions", deviceId);
+  if (sessions.has(deviceId)) {
+    io.emit("ready", { deviceId });
+    return;
+  }
+
+  const sessionPath = path.join(__dirname, "sessions", deviceId);
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
 
   const sock = makeWASocket({
     auth: state,
-    keepAliveIntervalMs: 20000,
-    markOnlineOnConnect: false,
-    logger: pino({ level: "fatal" }),
-    browser: ["SAFARI", "FFA", "1.0"],
+    keepAliveIntervalMs: 30000,
     printQRInTerminal: false,
+    logger,
+    browser: ["WAF Service", "Chrome", "1.0.0"],
   });
 
   sessions.set(deviceId, sock);
 
-  sock.ev.on("connection.update", (update) => {
-    const { connection, lastDisconnect, qr, isNewLogin } = update;
-    io.emit("connection_status", { deviceId, connection });
-    console.log(connection);
-
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      qrcode.toDataURL(qr, (err, url) => {
+      try {
+        const url = await qrcode.toDataURL(qr);
         io.emit("qr", { deviceId, url });
-      });
-    }
-
-    if (isNewLogin) {
-      io.emit("login_success", { deviceId });
+      } catch (err) {
+        console.error("QR Generation Error:", err);
+      }
     }
 
     if (connection === "close") {
       const shouldReconnect =
         lastDisconnect?.error?.output?.statusCode !==
         DisconnectReason.loggedOut;
+
+      console.log(
+        `Connection closed for ${deviceId}. Reconnecting: ${shouldReconnect}`,
+      );
+
       if (shouldReconnect) {
+        sessions.delete(deviceId);
         createSession(deviceId, io);
       } else {
-        sessions.delete(deviceId);
+        removeSession(deviceId);
       }
-    }
-
-    if (connection === "open") {
+    } else if (connection === "open") {
+      console.log(`WhatsApp ready for device: ${deviceId}`);
       io.emit("ready", { deviceId });
     }
-  });
 
-  sock.ev.on("messages.upsert", (msg) => {
-    console.log(msg);
-
-    // msg.type biasanya "notify" untuk pesan baru
-    if (msg.type === "notify") {
-      // Ambil pesan pertama
-      const messageObj = msg.messages[0];
-
-      // Pastikan pesan punya property message dan conversation (text biasa)
-      if (messageObj.message && messageObj.message.conversation) {
-        const pesan = messageObj.message.conversation;
-        console.log("Pesan masuk:", pesan);
-
-        if (pesan === "ki") {
-          // Balas pesan ke pengirim
-          sock.sendMessage(messageObj.key.remoteJid, { text: "mi" });
-        }
-      }
-    }
-
-    // Emit ke socket io (optional)
-    io.emit("message_received", { deviceId, messages: msg });
+    io.emit("connection_status", { deviceId, connection });
   });
 
   sock.ev.on("creds.update", saveCreds);
+
+  sock.ev.on("messages.upsert", (m) => {
+    // Optional: Handle incoming messages here
+    // io.emit("message", { deviceId, data: m });
+  });
+
+  return sock;
 }
 
 async function sendMessage(deviceId, to, message) {
-  const session = sessions.get(deviceId);
-  if (!session) throw new Error("Session not found");
+  const sock = sessions.get(deviceId);
+  if (!sock) throw new Error("Session not found or not initialized");
 
-  const jid = `${to}@s.whatsapp.net`;
-  return session.sendMessage(jid, { text: message });
+  const jid = `${to.replace(/\D/g, "")}@s.whatsapp.net`;
+  return await sock.sendMessage(jid, { text: message });
 }
 
 async function numberCheck(deviceId, to) {
-  const session = sessions.get(deviceId);
-  if (!session) throw new Error("Session not found");
+  const sock = sessions.get(deviceId);
+  if (!sock) throw new Error("Session not found or not initialized");
 
-  const result = await session.onWhatsApp(to);
-  console.log(result);
-  return result;
+  const formattedTo = to.replace(/\D/g, "");
+  return await sock.onWhatsApp(formattedTo);
 }
 
 async function removeSession(deviceId) {
-  const sessionPath = path.join(__dirname, ".", "sessions", deviceId);
-  fs.rmSync(sessionPath, { recursive: true, force: true });
+  const sessionPath = path.join(__dirname, "sessions", deviceId);
+  try {
+    if (fs.existsSync(sessionPath)) {
+      fs.rmSync(sessionPath, { recursive: true, force: true });
+    }
+  } catch (err) {
+    console.error("Error removing session directory:", err);
+  }
   sessions.delete(deviceId);
+}
+
+function getSessionStatus(deviceId) {
+  const sock = sessions.get(deviceId);
+  if (!sock) return { status: "disconnected" };
+  // Baileys socket doesn't have a simple isConnected property exposed this way easily without checking `ws`
+  // But if it's in the map, it's at least initialized.
+  // We can try to check user object or similar.
+  return { status: "connected", user: sock.user };
 }
 
 module.exports = {
   createSession,
   sendMessage,
-  removeSession,
   numberCheck,
+  removeSession,
+  getSessionStatus,
 };
