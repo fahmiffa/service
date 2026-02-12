@@ -13,6 +13,8 @@ model User {
   email     String   @unique
   password  String
   phone     String   @unique
+  role      Int      @default(1) // 0 = admin, 1 = user
+  status    Int      @default(1) // 1 = aktif, 2 = tidak aktif
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

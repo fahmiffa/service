@@ -25,13 +25,15 @@ const register = async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with role=1 (user) and status=1 (active)
     const user = await prisma.user.create({
       data: {
         username,
         email,
         password: hashedPassword,
         phone,
+        role: 1,
+        status: 1,
       },
     });
 
@@ -60,6 +62,13 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "User not found" });
     }
 
+    // Cek status akun
+    if (user.status !== 1) {
+      return res
+        .status(403)
+        .json({ message: "Akun Anda tidak aktif. Hubungi admin." });
+    }
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       console.log("Invalid password for:", phone);
@@ -67,9 +76,9 @@ const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user.id, username: user.username },
+      { userId: user.id, username: user.username, role: user.role },
       JWT_SECRET,
-      { expiresIn: "1h" },
+      { expiresIn: "24h" },
     );
 
     res.json({
@@ -78,9 +87,10 @@ const login = async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-
         email: user.email,
         phone: user.phone,
+        role: user.role,
+        status: user.status,
       },
     });
   } catch (error) {
