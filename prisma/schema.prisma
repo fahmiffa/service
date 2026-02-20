@@ -47,3 +47,27 @@ model Attendance {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+model Customer {
+  id        Int       @id @default(autoincrement())
+  name      String
+  hp        String
+  alamat    String
+  amount    Float     @default(0)
+  invoices  Invoice[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Invoice {
+  id         Int       @id @default(autoincrement())
+  invoiceNo  String    @unique
+  customerId Int
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  amount     Float
+  period     String
+  status     String    @default("unpaid")
+  sentAt     DateTime?
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}

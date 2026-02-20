@@ -4,6 +4,8 @@ const path = require("path");
 const routes = require("./apiRoutes");
 const authRoutes = require("./authRoutes");
 const schoolRoutes = require("./schoolRoutes");
+const customerRoutes = require("./customerRoutes");
+const invoiceRoutes = require("./invoiceRoutes");
 require("dotenv").config();
 
 const app = express();
@@ -28,6 +30,8 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/api", routes);
 app.use("/api/auth", authRoutes);
 app.use("/api", schoolRoutes);
+app.use("/api", customerRoutes);
+app.use("/api", invoiceRoutes);
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
