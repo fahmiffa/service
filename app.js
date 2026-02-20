@@ -32,6 +32,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api", schoolRoutes);
 app.use("/api", customerRoutes);
 app.use("/api", invoiceRoutes);
+const botRoutes = require("./botRoutes");
+app.use("/api/bots", botRoutes);
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));

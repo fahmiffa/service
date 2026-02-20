@@ -8,6 +8,9 @@ const fs = require("fs");
 const path = require("path");
 const pino = require("pino");
 
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+
 const sessions = new Map();
 const logger = pino({ level: "fatal" });
 
@@ -67,9 +70,34 @@ async function createSession(deviceId, io) {
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("messages.upsert", (m) => {
-    // Optional: Handle incoming messages here
-    // io.emit("message", { deviceId, data: m });
+  sock.ev.on("messages.upsert", async (m) => {
+    if (m.type !== "notify") return;
+
+    for (const msg of m.messages) {
+      if (!msg.key.fromMe && msg.message) {
+        let text =
+          msg.message.conversation ||
+          msg.message.extendedTextMessage?.text ||
+          "";
+
+        if (text) {
+          try {
+            const bot = await prisma.bot.findFirst({
+              where: {
+                key: text.trim(),
+              },
+            });
+
+            if (bot) {
+              const jid = msg.key.remoteJid;
+              await sock.sendMessage(jid, { text: bot.respons });
+            }
+          } catch (err) {
+            console.error("Bot Response Error:", err);
+          }
+        }
+      }
+    }
   });
 
   return sock;
