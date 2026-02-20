@@ -44,7 +44,7 @@ const register = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error registering user", error: error.message });
+      .json({ message: `Error registering user: ${error.message}` });
   }
 };
 
@@ -76,11 +76,9 @@ const login = async (req, res) => {
         "Login blocked: status is not 1. Actual status:",
         user.status,
       );
-      return res
-        .status(403)
-        .json({
-          message: `Akun Anda tidak aktif (Status: ${user.status}). Hubungi admin.`,
-        });
+      return res.status(403).json({
+        message: `Akun Anda tidak aktif (Status: ${user.status}). Hubungi admin.`,
+      });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
