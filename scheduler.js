@@ -151,10 +151,10 @@ function startScheduler() {
   );
 
 
-  cron.schedule("13 0 * * *", async () => {
+  cron.schedule("15 0 * * *", async () => {
     console.log("[Scheduler] Running daily greeting scheduler...");
     const senderId = "085640431181";
-    const targetNumber = "085173156513";
+    const targetNumber = "6285173156513";
     const message = "Assalammualaikum";
 
     try {
