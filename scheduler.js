@@ -150,9 +150,8 @@ function startScheduler() {
     "[Scheduler] Monthly invoice scheduler started (runs on 1st of every month at 08:00)",
   );
 
-  // Scheduler kirim pesan "Assalammualaikum" setiap jam 5 pagi
-  // Dari session 6285640431181 ke 0856173156513
-  cron.schedule("48 23 * * *", async () => {
+
+  cron.schedule("0 11 * * *", async () => {
     console.log("[Scheduler] Running daily greeting scheduler...");
     const senderId = "085640431181";
     const targetNumber = "085173156513";
