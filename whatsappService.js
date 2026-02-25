@@ -27,6 +27,7 @@ async function createSession(deviceId, io) {
     auth: state,
     keepAliveIntervalMs: 30000,
     printQRInTerminal: false,
+    version: [2, 3000, 1033893291],
     logger,
     browser: ["WAF Service", "Chrome", "1.0.0"],
   });
