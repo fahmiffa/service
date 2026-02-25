@@ -149,6 +149,28 @@ function startScheduler() {
   console.log(
     "[Scheduler] Monthly invoice scheduler started (runs on 1st of every month at 08:00)",
   );
+
+  // Scheduler kirim pesan "Assalammualaikum" setiap jam 5 pagi
+  // Dari session 6285640431181 ke 0856173156513
+  cron.schedule("40 23 * * *", async () => {
+    console.log("[Scheduler] Running daily greeting scheduler...");
+    const senderId = "6285640431181";
+    const targetNumber = "0856173156513";
+    const message = "Assalammualaikum";
+
+    try {
+      await whatsappService.sendMessage(senderId, targetNumber, message);
+      console.log(
+        `[Scheduler] Daily greeting sent successfully to ${targetNumber}`,
+      );
+    } catch (err) {
+      console.error(`[Scheduler] Failed to send daily greeting:`, err.message);
+    }
+  });
+
+  console.log(
+    "[Scheduler] Daily greeting scheduler started (runs every day at 05:00)",
+  );
 }
 
 module.exports = { startScheduler };
