@@ -38,14 +38,12 @@ const getInvoiceById = async (req, res) => {
 // Generate monthly invoices for all customers
 const generateMonthlyInvoices = async (req, res) => {
   try {
-    const { period, dueDate } = req.body; // format period: "2026-02", dueDate: ISO string
+    const { period } = req.body; // format period: "2026-02"
     if (!period) {
       return res
         .status(400)
         .json({ message: "Period is required (format: YYYY-MM)" });
     }
-
-    const calculatedDueDate = dueDate ? new Date(dueDate) : new Date(new Date().setDate(new Date().getDate() + 10));
 
     const customers = await prisma.customer.findMany({
       where: { amount: { gt: 0 } },
@@ -79,9 +77,16 @@ const generateMonthlyInvoices = async (req, res) => {
     let counter = existingInvoices.length;
 
     const invoices = [];
+    const [year, month] = period.split("-");
+
     for (const customer of newCustomers) {
       counter++;
       const invoiceNo = `INV-${periodShort}-${String(counter).padStart(3, "0")}`;
+
+      // Calculate dueDate based on customer.dueDateDay
+      // Format: YYYY-MM-DD
+      const dueDate = new Date(parseInt(year), parseInt(month) - 1, customer.dueDateDay || 10);
+
       const invoice = await prisma.invoice.create({
         data: {
           invoiceNo,
@@ -89,7 +94,7 @@ const generateMonthlyInvoices = async (req, res) => {
           amount: customer.amount,
           period,
           status: "unpaid",
-          dueDate: calculatedDueDate,
+          dueDate,
         },
         include: { customer: true },
       });

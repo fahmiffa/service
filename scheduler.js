@@ -30,6 +30,29 @@ function formatPeriod(period) {
   return `${months[parseInt(month) - 1]} ${year}`;
 }
 
+function formatDate(date) {
+  if (!date) return "-";
+  return new Date(date).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function replaceTemplate(template, data) {
+  if (!template) {
+    return `📋 *INVOICE TAGIHAN*\n\nNo. Invoice: ${data.invoiceNo}\nNama: ${data.name}\nPeriode: ${data.period}\nJumlah: ${data.amount}\nJatuh Tempo: ${data.dueDate}\n\nMohon segera melakukan pembayaran.\nTerima kasih 🙏`;
+  }
+
+  return template
+    .replace(/{name}/g, data.name)
+    .replace(/{invoiceNo}/g, data.invoiceNo)
+    .replace(/{amount}/g, data.amount)
+    .replace(/{period}/g, data.period)
+    .replace(/{dueDate}/g, data.dueDate)
+    .replace(/{alamat}/g, data.alamat || "-");
+}
+
 function startScheduler() {
   // Jalankan setiap tanggal 1, jam 08:00 pagi
   // Format cron: minute hour day-of-month month day-of-week
@@ -67,9 +90,19 @@ function startScheduler() {
       let counter = existingInvoices.length;
       const generatedInvoices = [];
 
+      const [yearStr, monthStr] = period.split("-");
+
       for (const customer of newCustomers) {
         counter++;
         const invoiceNo = `INV-${periodShort}-${String(counter).padStart(3, "0")}`;
+
+        // Calculate dueDate based on customer.dueDateDay
+        const dueDate = new Date(
+          parseInt(yearStr),
+          parseInt(monthStr) - 1,
+          customer.dueDateDay || 10,
+        );
+
         const invoice = await prisma.invoice.create({
           data: {
             invoiceNo,
@@ -77,6 +110,7 @@ function startScheduler() {
             amount: customer.amount,
             period,
             status: "unpaid",
+            dueDate,
           },
           include: { customer: true },
         });
@@ -113,7 +147,19 @@ function startScheduler() {
 
       for (const invoice of generatedInvoices) {
         try {
-          const message = `📋 *INVOICE TAGIHAN*\n\nNo. Invoice: ${invoice.invoiceNo}\nNama: ${invoice.customer.name}\nPeriode: ${formatPeriod(invoice.period)}\nJumlah: ${formatRupiah(invoice.amount)}\n\nMohon segera melakukan pembayaran.\nTerima kasih 🙏`;
+          const messageData = {
+            invoiceNo: invoice.invoiceNo,
+            name: invoice.customer.name,
+            period: formatPeriod(invoice.period),
+            amount: formatRupiah(invoice.amount),
+            dueDate: formatDate(invoice.dueDate),
+            alamat: invoice.customer.alamat,
+          };
+
+          const message = replaceTemplate(
+            invoice.customer.messageTemplate,
+            messageData,
+          );
 
           await whatsappService.sendMessage(
             senderDeviceId,

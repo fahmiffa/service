@@ -55,6 +55,7 @@ model Customer {
   amount    Float     @default(0)
   invoices        Invoice[]
   messageTemplate String?   @db.Text
+  dueDateDay      Int       @default(10)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
