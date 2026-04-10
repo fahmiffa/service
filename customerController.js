@@ -32,9 +32,15 @@ const getCustomerById = async (req, res) => {
 // CREATE customer
 const createCustomer = async (req, res) => {
   try {
-    const { name, hp, alamat, amount } = req.body;
+    const { name, hp, alamat, amount, messageTemplate } = req.body;
     const customer = await prisma.customer.create({
-      data: { name, hp, alamat, amount: amount ? parseFloat(amount) : 0 },
+      data: {
+        name,
+        hp,
+        alamat,
+        amount: amount ? parseFloat(amount) : 0,
+        messageTemplate,
+      },
     });
     res.status(201).json({
       message: "Customer created successfully",
@@ -49,7 +55,7 @@ const createCustomer = async (req, res) => {
 const updateCustomer = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, hp, alamat, amount } = req.body;
+    const { name, hp, alamat, amount, messageTemplate } = req.body;
     const customer = await prisma.customer.update({
       where: { id: parseInt(id) },
       data: {
@@ -57,6 +63,7 @@ const updateCustomer = async (req, res) => {
         hp,
         alamat,
         amount: amount !== undefined ? parseFloat(amount) : undefined,
+        messageTemplate,
       },
     });
     res.json({

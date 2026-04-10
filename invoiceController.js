@@ -38,12 +38,14 @@ const getInvoiceById = async (req, res) => {
 // Generate monthly invoices for all customers
 const generateMonthlyInvoices = async (req, res) => {
   try {
-    const { period } = req.body; // format: "2026-02"
+    const { period, dueDate } = req.body; // format period: "2026-02", dueDate: ISO string
     if (!period) {
       return res
         .status(400)
         .json({ message: "Period is required (format: YYYY-MM)" });
     }
+
+    const calculatedDueDate = dueDate ? new Date(dueDate) : new Date(new Date().setDate(new Date().getDate() + 10));
 
     const customers = await prisma.customer.findMany({
       where: { amount: { gt: 0 } },
@@ -87,6 +89,7 @@ const generateMonthlyInvoices = async (req, res) => {
           amount: customer.amount,
           period,
           status: "unpaid",
+          dueDate: calculatedDueDate,
         },
         include: { customer: true },
       });
@@ -165,6 +168,31 @@ function formatPeriod(period) {
   return `${months[parseInt(month) - 1]} ${year}`;
 }
 
+// Format date to local date string
+function formatDate(date) {
+  if (!date) return "-";
+  return new Date(date).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// Replace template variables
+function replaceTemplate(template, data) {
+  if (!template) {
+    return `📋 *INVOICE TAGIHAN*\n\nNo. Invoice: ${data.invoiceNo}\nNama: ${data.name}\nPeriode: ${data.period}\nJumlah: ${data.amount}\nJatuh Tempo: ${data.dueDate}\n\nMohon segera melakukan pembayaran.\nTerima kasih 🙏`;
+  }
+
+  return template
+    .replace(/{name}/g, data.name)
+    .replace(/{invoiceNo}/g, data.invoiceNo)
+    .replace(/{amount}/g, data.amount)
+    .replace(/{period}/g, data.period)
+    .replace(/{dueDate}/g, data.dueDate)
+    .replace(/{alamat}/g, data.alamat || "-");
+}
+
 // Send single invoice via WhatsApp
 const sendInvoiceWhatsApp = async (req, res) => {
   try {
@@ -184,7 +212,16 @@ const sendInvoiceWhatsApp = async (req, res) => {
       return res.status(404).json({ message: "Invoice not found" });
     }
 
-    const message = `📋 *INVOICE TAGIHAN*\n\nNo. Invoice: ${invoice.invoiceNo}\nNama: ${invoice.customer.name}\nPeriode: ${formatPeriod(invoice.period)}\nJumlah: ${formatRupiah(invoice.amount)}\n\nMohon segera melakukan pembayaran.\nTerima kasih 🙏`;
+    const messageData = {
+      invoiceNo: invoice.invoiceNo,
+      name: invoice.customer.name,
+      period: formatPeriod(invoice.period),
+      amount: formatRupiah(invoice.amount),
+      dueDate: formatDate(invoice.dueDate),
+      alamat: invoice.customer.alamat,
+    };
+
+    const message = replaceTemplate(invoice.customer.messageTemplate, messageData);
 
     await whatsappService.sendMessage(sender, invoice.customer.hp, message);
 
@@ -225,7 +262,19 @@ const sendAllPendingInvoices = async (req, res) => {
     const results = [];
     for (const invoice of invoices) {
       try {
-        const message = `📋 *INVOICE TAGIHAN*\n\nNo. Invoice: ${invoice.invoiceNo}\nNama: ${invoice.customer.name}\nPeriode: ${formatPeriod(invoice.period)}\nJumlah: ${formatRupiah(invoice.amount)}\n\nMohon segera melakukan pembayaran.\nTerima kasih 🙏`;
+        const messageData = {
+          invoiceNo: invoice.invoiceNo,
+          name: invoice.customer.name,
+          period: formatPeriod(invoice.period),
+          amount: formatRupiah(invoice.amount),
+          dueDate: formatDate(invoice.dueDate),
+          alamat: invoice.customer.alamat,
+        };
+
+        const message = replaceTemplate(
+          invoice.customer.messageTemplate,
+          messageData,
+        );
 
         await whatsappService.sendMessage(sender, invoice.customer.hp, message);
 
