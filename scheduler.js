@@ -70,6 +70,8 @@ function startScheduler() {
         where: { amount: { gt: 0 } },
       });
 
+      console.log(`[Scheduler] Cycle at ${new Date().toLocaleTimeString()} - Found ${customers.length} customers with billing`);
+
       // 2. Cari sesi WhatsApp aktif sekali saja untuk efisiensi
       const senderDeviceId = await getActiveSession();
 
@@ -82,19 +84,23 @@ function startScheduler() {
           },
         });
 
-        if (existingInvoice) continue;
+        if (existingInvoice) {
+          console.log(`[Scheduler] Skipping ${customer.name}: Invoice already exists for ${period}`);
+          continue;
+        }
 
         // Ambil waktu jatuh tempo dari customer
         const [dueHour, dueMinute] = (customer.dueTime || "00:00").split(":").map(Number);
         
         // Cek apakah sudah waktunya:
-        // A. Sudah lewat tanggal jatuh tempo
-        // B. Hari ini adalah tanggalnya, dan sudah lewat jam & menitnya
         const isPastDate = currentDay > customer.dueDateDay;
         const isExactDayAndTime = currentDay === customer.dueDateDay && 
                                   (currentHour > dueHour || (currentHour === dueHour && currentMinute >= dueMinute));
 
-        if (isPastDate || isExactDayAndTime) {
+        if (!isPastDate && !isExactDayAndTime) {
+           console.log(`[Scheduler] Wait time for ${customer.name} (Scheduled: Tgl ${customer.dueDateDay} ${customer.dueTime})`);
+           continue;
+        }
           console.log(`[Scheduler] Generating JIT invoice for ${customer.name} (Due: Tgl ${customer.dueDateDay} ${customer.dueTime})`);
           
           const periodShort = period.replace("-", "");
