@@ -55,8 +55,21 @@ function replaceTemplate(template, data) {
     .replace(/{alamat}/g, data.alamat || "-");
 }
 
+async function getActiveSession() {
+  const fs = require("fs");
+  const path = require("path");
+  const sessionsDir = path.join(__dirname, "sessions");
+  if (fs.existsSync(sessionsDir)) {
+    const list = fs.readdirSync(sessionsDir);
+    return list.length > 0 ? list[0] : null;
+  }
+  return null;
+}
+
 function startScheduler() {
-  // Berjalan SETIAP MENIT untuk mengecek apakah ada customer yang sudah masuk waktu jatuh temponya
+  console.log("[Scheduler] Minutely precise scheduler started");
+
+  // Berjalan SETIAP MENIT
   cron.schedule("* * * * *", async () => {
     const now = new Date();
     const currentDay = now.getDate();
@@ -65,18 +78,15 @@ function startScheduler() {
     const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
     try {
-      // 1. Ambil semua customer yang memiliki tagihan
       const customers = await prisma.customer.findMany({
         where: { amount: { gt: 0 } },
       });
 
-      console.log(`[Scheduler] Cycle at ${new Date().toLocaleTimeString()} - Found ${customers.length} customers with billing`);
+      console.log(`[Scheduler] Cycle at ${now.toLocaleTimeString()} - Checking ${customers.length} customers`);
 
-      // 2. Cari sesi WhatsApp aktif sekali saja untuk efisiensi
       const senderDeviceId = await getActiveSession();
 
       for (const customer of customers) {
-        // Cek apakah invoice bulan ini sudah ada
         const existingInvoice = await prisma.invoice.findFirst({
           where: { 
             customerId: customer.id,
@@ -85,23 +95,18 @@ function startScheduler() {
         });
 
         if (existingInvoice) {
-          console.log(`[Scheduler] Skipping ${customer.name}: Invoice already exists for ${period}`);
+          // console.log(`[Scheduler] Skipping ${customer.name}: Invoice already exists`);
           continue;
         }
 
-        // Ambil waktu jatuh tempo dari customer
         const [dueHour, dueMinute] = (customer.dueTime || "00:00").split(":").map(Number);
         
-        // Cek apakah sudah waktunya:
         const isPastDate = currentDay > customer.dueDateDay;
         const isExactDayAndTime = currentDay === customer.dueDateDay && 
                                   (currentHour > dueHour || (currentHour === dueHour && currentMinute >= dueMinute));
 
-        if (!isPastDate && !isExactDayAndTime) {
-           console.log(`[Scheduler] Wait time for ${customer.name} (Scheduled: Tgl ${customer.dueDateDay} ${customer.dueTime})`);
-           continue;
-        }
-          console.log(`[Scheduler] Generating JIT invoice for ${customer.name} (Due: Tgl ${customer.dueDateDay} ${customer.dueTime})`);
+        if (isPastDate || isExactDayAndTime) {
+          console.log(`[Scheduler] Processing invoice for ${customer.name}...`);
           
           const periodShort = period.replace("-", "");
           const totalInvoices = await prisma.invoice.count({ where: { period } });
@@ -121,7 +126,6 @@ function startScheduler() {
             include: { customer: true },
           });
 
-          // Kirim WhatsApp
           if (senderDeviceId) {
             try {
               const messageData = {
@@ -141,46 +145,30 @@ function startScheduler() {
                 data: { status: "sent", sentAt: new Date() },
               });
               
-              console.log(`[Scheduler] Notification sent to ${customer.name}`);
+              console.log(`[Scheduler] SUCCESS: Message sent to ${customer.name}`);
             } catch (err) {
-              console.error(`[Scheduler] Failed to send to ${customer.name}:`, err.message);
+              console.error(`[Scheduler] WA SEND ERROR for ${customer.name}:`, err.message);
             }
+          } else {
+            console.warn(`[Scheduler] WARNING: No active session to send message for ${customer.name}`);
           }
         }
       }
     } catch (error) {
-      console.error("[Scheduler] Minute Task Error:", error.message);
+      console.error("[Scheduler] CRITICAL ERROR:", error);
     }
   });
 
   // Ucapan Harian jam 05:00
   cron.schedule("0 5 * * *", async () => {
-    console.log("[Scheduler] Running daily greeting...");
     try {
       const senderId = await getActiveSession();
       if (!senderId) return;
-
-      const targetNumber = "6285173156513";
-      const message = "Assalammualaikum";
-      await whatsappService.sendMessage(senderId, targetNumber, message);
+      await whatsappService.sendMessage(senderId, "6285173156513", "Assalammualaikum");
     } catch (err) {
       console.error(`[Scheduler] Greeting error:`, err.message);
     }
   });
-
-  console.log("[Scheduler] Minutely precise scheduler started");
-}
-
-// Helper to find active session
-async function getActiveSession() {
-  const fs = require("fs");
-  const path = require("path");
-  const sessionsDir = path.join(__dirname, "sessions");
-  if (fs.existsSync(sessionsDir)) {
-    const list = fs.readdirSync(sessionsDir);
-    return list.length > 0 ? list[0] : null;
-  }
-  return null;
 }
 
 module.exports = { startScheduler };
