@@ -66,6 +66,32 @@ async function getActiveSession() {
   return null;
 }
 
+async function sendWA(senderDeviceId, invoice, customer) {
+  if (!senderDeviceId) return;
+  try {
+    const messageData = {
+      invoiceNo: invoice.invoiceNo,
+      name: customer.name,
+      period: formatPeriod(invoice.period),
+      amount: formatRupiah(invoice.amount),
+      dueDate: formatDate(invoice.dueDate),
+      alamat: customer.alamat,
+    };
+
+    const message = replaceTemplate(customer.messageTemplate, messageData);
+    await whatsappService.sendMessage(senderDeviceId, customer.hp, message);
+
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: { status: "sent", sentAt: new Date() },
+    });
+    
+    console.log(`[Scheduler] SUCCESS: Message sent to ${customer.name}`);
+  } catch (err) {
+    console.error(`[Scheduler] WA SEND ERROR for ${customer.name}:`, err.message);
+  }
+}
+
 function startScheduler() {
   console.log("[Scheduler] Minutely precise scheduler started");
 
@@ -87,6 +113,7 @@ function startScheduler() {
       const senderDeviceId = await getActiveSession();
 
       for (const customer of customers) {
+        // Cek apakah invoice bulan ini sudah ada
         const existingInvoice = await prisma.invoice.findFirst({
           where: { 
             customerId: customer.id,
@@ -94,19 +121,26 @@ function startScheduler() {
           },
         });
 
-        if (existingInvoice) {
-          // console.log(`[Scheduler] Skipping ${customer.name}: Invoice already exists`);
-          continue;
-        }
-
         const [dueHour, dueMinute] = (customer.dueTime || "00:00").split(":").map(Number);
-        
         const isPastDate = currentDay > customer.dueDateDay;
         const isExactDayAndTime = currentDay === customer.dueDateDay && 
                                   (currentHour > dueHour || (currentHour === dueHour && currentMinute >= dueMinute));
 
+        // Jika sudah ada invoice...
+        if (existingInvoice) {
+          // ...tapi statusnya belum 'sent', maka kita coba kirim WA-nya
+          if (existingInvoice.status === "unpaid" && (isPastDate || isExactDayAndTime)) {
+            console.log(`[Scheduler] ${customer.name} already has an invoice but not sent. Sending now...`);
+            await sendWA(senderDeviceId, existingInvoice, customer);
+          } else {
+             // console.log(`[Scheduler] Skipping ${customer.name}: Invoice already exists and status is ${existingInvoice.status}`);
+          }
+          continue;
+        }
+
+        // Jika belum ada invoice, cek apakah sudah waktunya diproses
         if (isPastDate || isExactDayAndTime) {
-          console.log(`[Scheduler] Processing invoice for ${customer.name}...`);
+          console.log(`[Scheduler] Processing new invoice for ${customer.name}...`);
           
           const periodShort = period.replace("-", "");
           const totalInvoices = await prisma.invoice.count({ where: { period } });
@@ -127,30 +161,9 @@ function startScheduler() {
           });
 
           if (senderDeviceId) {
-            try {
-              const messageData = {
-                invoiceNo: invoice.invoiceNo,
-                name: invoice.customer.name,
-                period: formatPeriod(invoice.period),
-                amount: formatRupiah(invoice.amount),
-                dueDate: formatDate(invoice.dueDate),
-                alamat: invoice.customer.alamat,
-              };
-
-              const message = replaceTemplate(invoice.customer.messageTemplate, messageData);
-              await whatsappService.sendMessage(senderDeviceId, invoice.customer.hp, message);
-
-              await prisma.invoice.update({
-                where: { id: invoice.id },
-                data: { status: "sent", sentAt: new Date() },
-              });
-              
-              console.log(`[Scheduler] SUCCESS: Message sent to ${customer.name}`);
-            } catch (err) {
-              console.error(`[Scheduler] WA SEND ERROR for ${customer.name}:`, err.message);
-            }
+            await sendWA(senderDeviceId, invoice, customer);
           } else {
-            console.warn(`[Scheduler] WARNING: No active session to send message for ${customer.name}`);
+            console.warn(`[Scheduler] WARNING: No active session for ${customer.name}`);
           }
         }
       }
