@@ -32,7 +32,7 @@ const getCustomerById = async (req, res) => {
 // CREATE customer
 const createCustomer = async (req, res) => {
   try {
-    const { name, hp, alamat, amount, messageTemplate, dueDateDay } = req.body;
+    const { name, hp, alamat, amount, messageTemplate, dueDateDay, dueTime } = req.body;
     const customer = await prisma.customer.create({
       data: {
         name,
@@ -41,6 +41,7 @@ const createCustomer = async (req, res) => {
         amount: amount ? parseFloat(amount) : 0,
         messageTemplate,
         dueDateDay: dueDateDay ? parseInt(dueDateDay) : 10,
+        dueTime: dueTime || "00:00",
       },
     });
     res.status(201).json({
@@ -56,7 +57,7 @@ const createCustomer = async (req, res) => {
 const updateCustomer = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, hp, alamat, amount, messageTemplate, dueDateDay } = req.body;
+    const { name, hp, alamat, amount, messageTemplate, dueDateDay, dueTime } = req.body;
     const customer = await prisma.customer.update({
       where: { id: parseInt(id) },
       data: {
@@ -66,6 +67,7 @@ const updateCustomer = async (req, res) => {
         amount: amount !== undefined ? parseFloat(amount) : undefined,
         messageTemplate,
         dueDateDay: dueDateDay !== undefined ? parseInt(dueDateDay) : undefined,
+        dueTime: dueTime !== undefined ? dueTime : undefined,
       },
     });
     res.json({

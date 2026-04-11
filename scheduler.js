@@ -36,7 +36,9 @@ function formatDate(date) {
     day: "numeric",
     month: "long",
     year: "numeric",
-  });
+    hour: "2-digit",
+    minute: "2-digit",
+  }).replace(/\./g, ":");
 }
 
 function replaceTemplate(template, data) {
@@ -96,11 +98,14 @@ function startScheduler() {
         counter++;
         const invoiceNo = `INV-${periodShort}-${String(counter).padStart(3, "0")}`;
 
-        // Calculate dueDate based on customer.dueDateDay
+        // Calculate dueDate based on customer.dueDateDay and dueTime
+        const [hour, minute] = (customer.dueTime || "00:00").split(":").map(Number);
         const dueDate = new Date(
           parseInt(yearStr),
           parseInt(monthStr) - 1,
           customer.dueDateDay || 10,
+          hour,
+          minute
         );
 
         const invoice = await prisma.invoice.create({
