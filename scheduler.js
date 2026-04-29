@@ -175,8 +175,14 @@ function startScheduler() {
   // Ucapan Harian jam 05:00
   cron.schedule("0 5 * * *", async () => {
     try {
-      const senderId = await getActiveSession();
+      // Ambil senderId dari user dengan role 0 (admin)
+      const admin = await prisma.user.findFirst({
+        where: { role: 0 }
+      });
+      
+      const senderId = admin && admin.phone ? admin.phone : await getActiveSession();
       if (!senderId) return;
+
       await whatsappService.sendMessage(senderId, "6285173156513", "Assalammualaikum");
     } catch (err) {
       console.error(`[Scheduler] Greeting error:`, err.message);
