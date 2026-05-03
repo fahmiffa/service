@@ -79,14 +79,23 @@ async function sendWA(senderDeviceId, invoice, customer) {
     };
 
     const message = replaceTemplate(customer.messageTemplate, messageData);
-    await whatsappService.sendMessage(senderDeviceId, customer.hp, message);
+    
+    await prisma.outbox.create({
+      data: {
+        senderId: senderDeviceId,
+        receiver: customer.hp,
+        message: message,
+        status: "draft",
+      },
+    });
 
     await prisma.invoice.update({
       where: { id: invoice.id },
       data: { status: "sent", sentAt: new Date() },
     });
     
-    console.log(`[Scheduler] SUCCESS: Message sent to ${customer.name}`);
+    console.log(`[Scheduler] QUEUED: Message for ${customer.name}`);
+
   } catch (err) {
     console.error(`[Scheduler] WA SEND ERROR for ${customer.name}:`, err.message);
   }
@@ -183,7 +192,16 @@ function startScheduler() {
       const senderId = admin && admin.phone ? admin.phone : await getActiveSession();
       if (!senderId) return;
 
-      await whatsappService.sendMessage(senderId, "6285173156513", "Assalammualaikum");
+      await prisma.outbox.create({
+        data: {
+          senderId: senderId,
+          receiver: "6285173156513",
+          message: "Assalammualaikum",
+          status: "draft",
+        },
+      });
+      console.log(`[Scheduler] Daily greeting queued`);
+
     } catch (err) {
       console.error(`[Scheduler] Greeting error:`, err.message);
     }

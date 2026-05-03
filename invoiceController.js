@@ -229,16 +229,24 @@ const sendInvoiceWhatsApp = async (req, res) => {
     };
 
     const message = replaceTemplate(invoice.customer.messageTemplate, messageData);
-
-    await whatsappService.sendMessage(sender, invoice.customer.hp, message);
+    
+    await prisma.outbox.create({
+      data: {
+        senderId: sender,
+        receiver: invoice.customer.hp,
+        message: message,
+        status: "draft",
+      },
+    });
 
     await prisma.invoice.update({
       where: { id: parseInt(id) },
       data: { status: "sent", sentAt: new Date() },
     });
 
-    res.json({ message: "Invoice berhasil dikirim via WhatsApp" });
+    res.json({ message: "Invoice queued in outbox" });
   } catch (error) {
+
     res.status(500).json({ message: error.message });
   }
 };
@@ -268,49 +276,40 @@ const sendAllPendingInvoices = async (req, res) => {
 
     const results = [];
     for (const invoice of invoices) {
-      try {
-        const messageData = {
-          invoiceNo: invoice.invoiceNo,
-          name: invoice.customer.name,
-          period: formatPeriod(invoice.period),
-          amount: formatRupiah(invoice.amount),
-          dueDate: formatDate(invoice.dueDate),
-          alamat: invoice.customer.alamat,
-        };
+      const messageData = {
+        invoiceNo: invoice.invoiceNo,
+        name: invoice.customer.name,
+        period: formatPeriod(invoice.period),
+        amount: formatRupiah(invoice.amount),
+        dueDate: formatDate(invoice.dueDate),
+        alamat: invoice.customer.alamat,
+      };
 
-        const message = replaceTemplate(
-          invoice.customer.messageTemplate,
-          messageData,
-        );
+      const message = replaceTemplate(
+        invoice.customer.messageTemplate,
+        messageData,
+      );
 
-        await whatsappService.sendMessage(sender, invoice.customer.hp, message);
+      await prisma.outbox.create({
+        data: {
+          senderId: sender,
+          receiver: invoice.customer.hp,
+          message: message,
+          status: "draft",
+        },
+      });
 
-        await prisma.invoice.update({
-          where: { id: invoice.id },
-          data: { status: "sent", sentAt: new Date() },
-        });
-
-        results.push({ invoiceNo: invoice.invoiceNo, status: "sent" });
-
-        // Delay 3 detik antar pesan
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      } catch (err) {
-        results.push({
-          invoiceNo: invoice.invoiceNo,
-          status: "failed",
-          error: err.message,
-        });
-      }
+      await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: { status: "sent", sentAt: new Date() },
+      });
     }
 
     res.json({
-      message: "Broadcast invoice selesai",
-      total: results.length,
-      sent: results.filter((r) => r.status === "sent").length,
-      failed: results.filter((r) => r.status === "failed").length,
-      results,
+      message: `${invoices.length} invoices queued in outbox`,
     });
   } catch (error) {
+
     res.status(500).json({ message: error.message });
   }
 };

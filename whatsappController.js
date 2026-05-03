@@ -1,5 +1,8 @@
 const { validationResult } = require("express-validator");
 const whatsappService = require("./whatsappService");
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+
 
 async function sendMessage(req, res) {
   const errors = validationResult(req);
@@ -10,12 +13,20 @@ async function sendMessage(req, res) {
   const { number, message, to } = req.body;
 
   try {
-    await whatsappService.sendMessage(number, to, message);
-    res.json({ status: true, message: "Message sent" });
+    await prisma.outbox.create({
+      data: {
+        senderId: number,
+        receiver: to,
+        message: message,
+        status: "draft",
+      },
+    });
+    res.json({ status: true, message: "Message queued in outbox" });
   } catch (err) {
     res.status(500).json({ status: false, message: err.message });
   }
 }
+
 
 async function numberCheck(req, res) {
   const errors = validationResult(req);
@@ -46,24 +57,23 @@ async function broadcastMessage(req, res) {
   const { number, message, recipients } = req.body;
 
   try {
-    // Process recipients in chunks or sequentially with delay
-    const results = [];
     for (const recipient of recipients) {
-      try {
-        await whatsappService.sendMessage(number, recipient, message);
-        results.push({ recipient, status: "sent" });
-        // Add a small delay to mimic human behavior and avoid rate limits
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      } catch (err) {
-        results.push({ recipient, status: "failed", error: err.message });
-      }
+      await prisma.outbox.create({
+        data: {
+          senderId: number,
+          receiver: recipient,
+          message: message,
+          status: "draft",
+        },
+      });
     }
 
-    res.json({ status: true, message: "Broadcast completed", results });
+    res.json({ status: true, message: "Broadcast messages queued in outbox" });
   } catch (err) {
     res.status(500).json({ status: false, message: err.message });
   }
 }
+
 
 async function logout(req, res) {
   const { number } = req.body;

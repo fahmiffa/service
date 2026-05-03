@@ -3,6 +3,7 @@ const socketIO = require("socket.io");
 const app = require("./app");
 const whatsappService = require("./whatsappService");
 const { startScheduler } = require("./scheduler");
+const { startOutboxProcessor } = require("./outboxProcessor");
 const path = require("path");
 const fs = require("fs");
 
@@ -56,4 +57,6 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   startScheduler();
+  startOutboxProcessor();
 });
+

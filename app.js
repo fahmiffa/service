@@ -33,7 +33,10 @@ app.use("/api", schoolRoutes);
 app.use("/api", customerRoutes);
 app.use("/api", invoiceRoutes);
 const botRoutes = require("./botRoutes");
+const outboxRoutes = require("./outboxRoutes");
 app.use("/api/bots", botRoutes);
+app.use("/api/outbox", outboxRoutes);
+
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
