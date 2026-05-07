@@ -33,5 +33,6 @@ router.post(
 router.post("/logout", [body("number").notEmpty()], controller.logout);
 
 router.get("/status/:number", controller.getStatus);
+router.post("/upload", controller.uploadImage);
 
 module.exports = router;

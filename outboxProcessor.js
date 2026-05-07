@@ -88,11 +88,16 @@ async function processOutbox() {
 
       console.log(`[Outbox] Processing: ${selectedDraft.receiver}`);
 
+      let imageToSend = selectedDraft.imageUrl;
+      if (imageToSend && imageToSend.startsWith("/uploads/")) {
+        imageToSend = path.join(__dirname, "public", imageToSend);
+      }
+
       const result = await whatsappService.sendMessage(
         senderId, 
         selectedDraft.receiver, 
         selectedDraft.message,
-        selectedDraft.imageUrl
+        imageToSend
       );
       
       await prisma.outbox.update({

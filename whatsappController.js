@@ -2,6 +2,53 @@ const { validationResult } = require("express-validator");
 const whatsappService = require("./whatsappService");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+
+// Multer Config
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadPath = path.join(__dirname, "public", "uploads");
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 1024 * 1024 }, // 1MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only images are allowed"));
+    }
+  },
+}).single("image");
+
+async function uploadImage(req, res) {
+  upload(req, res, function (err) {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ status: false, message: "File too large. Max 1MB" });
+    } else if (err) {
+      return res.status(400).json({ status: false, message: err.message });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ status: false, message: "No file uploaded" });
+    }
+
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ status: true, imageUrl: imageUrl });
+  });
+}
 
 
 async function sendMessage(req, res) {
@@ -105,4 +152,5 @@ module.exports = {
   broadcastMessage,
   logout,
   getStatus,
+  uploadImage,
 };
