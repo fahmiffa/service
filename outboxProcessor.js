@@ -88,7 +88,12 @@ async function processOutbox() {
 
       console.log(`[Outbox] Processing: ${selectedDraft.receiver}`);
 
-      const result = await whatsappService.sendMessage(senderId, selectedDraft.receiver, selectedDraft.message);
+      const result = await whatsappService.sendMessage(
+        senderId, 
+        selectedDraft.receiver, 
+        selectedDraft.message,
+        selectedDraft.imageUrl
+      );
       
       await prisma.outbox.update({
         where: { id: selectedDraft.id },

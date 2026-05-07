@@ -104,11 +104,19 @@ async function createSession(deviceId, io) {
   return sock;
 }
 
-async function sendMessage(deviceId, to, message) {
+async function sendMessage(deviceId, to, message, imageUrl = null) {
   const sock = sessions.get(deviceId);
   if (!sock) throw new Error("Session not found or not initialized");
 
   const jid = `${to.replace(/\D/g, "")}@s.whatsapp.net`;
+  
+  if (imageUrl) {
+    return await sock.sendMessage(jid, { 
+      image: { url: imageUrl }, 
+      caption: message 
+    });
+  }
+  
   return await sock.sendMessage(jid, { text: message });
 }
 

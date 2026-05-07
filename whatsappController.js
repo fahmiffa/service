@@ -10,7 +10,7 @@ async function sendMessage(req, res) {
     return res.status(400).json({ status: false, errors: errors.array() });
   }
 
-  const { number, message, to } = req.body;
+  const { number, message, to, imageUrl } = req.body;
 
   try {
     await prisma.outbox.create({
@@ -18,6 +18,7 @@ async function sendMessage(req, res) {
         senderId: number,
         receiver: to,
         message: message,
+        imageUrl: imageUrl,
         status: "draft",
       },
     });
@@ -54,7 +55,7 @@ async function broadcastMessage(req, res) {
     return res.status(400).json({ status: false, errors: errors.array() });
   }
 
-  const { number, message, recipients } = req.body;
+  const { number, message, recipients, imageUrl } = req.body;
 
   try {
     for (const recipient of recipients) {
@@ -63,6 +64,7 @@ async function broadcastMessage(req, res) {
           senderId: number,
           receiver: recipient,
           message: message,
+          imageUrl: imageUrl,
           status: "draft",
         },
       });

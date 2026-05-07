@@ -88,6 +88,7 @@ model Outbox {
   senderId    String?   // deviceId / sender number
   receiver    String
   message     String    @db.Text
+  imageUrl    String?   @db.Text
   status      String    @default("draft") // draft, success, failed
   response    String?   @db.Text
   scheduledAt DateTime?
