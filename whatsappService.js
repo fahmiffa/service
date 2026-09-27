@@ -16,6 +16,15 @@ const prisma = new PrismaClient();
 const sessions = new Map();
 const logger = pino({ level: "fatal" });
 
+function formatWhatsAppNumber(number) {
+  if (!number) return '';
+  let formatted = number.toString().replace(/\D/g, '');
+  if (formatted.startsWith('0')) {
+    formatted = '62' + formatted.substring(1);
+  }
+  return formatted;
+}
+
 async function createSession(deviceId, io, phoneNumber = null) {
   if (sessions.has(deviceId)) {
     io.emit("ready", { deviceId });
@@ -38,7 +47,7 @@ async function createSession(deviceId, io, phoneNumber = null) {
   if (phoneNumber && !sock.authState.creds.registered) {
     setTimeout(async () => {
       try {
-        const formattedNumber = phoneNumber.replace(/[^0-9]/g, "");
+        const formattedNumber = formatWhatsAppNumber(phoneNumber);
         let code = await sock.requestPairingCode(formattedNumber);
         code = code?.match(/.{1,4}/g)?.join("-") || code;
         io.emit("pairing_code", { deviceId, code });
@@ -122,7 +131,8 @@ async function sendMessage(deviceId, to, message, imageUrl = null) {
   const sock = sessions.get(deviceId);
   if (!sock) throw new Error("Session not found or not initialized");
 
-  const jid = `${to.replace(/\D/g, "")}@s.whatsapp.net`;
+  const formattedTo = formatWhatsAppNumber(to);
+  const jid = `${formattedTo}@s.whatsapp.net`;
 
   if (imageUrl) {
     return await sock.sendMessage(jid, {
@@ -138,7 +148,7 @@ async function numberCheck(deviceId, to) {
   const sock = sessions.get(deviceId);
   if (!sock) throw new Error("Session not found or not initialized");
 
-  const formattedTo = to.replace(/\D/g, "");
+  const formattedTo = formatWhatsAppNumber(to);
   return await sock.onWhatsApp(formattedTo);
 }
 
@@ -170,3 +180,5 @@ export {
   removeSession,
   getSessionStatus,
 };
+
+
