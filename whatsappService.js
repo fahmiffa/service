@@ -1,7 +1,6 @@
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
-  Browsers,
 } from "@whiskeysockets/baileys";
 import qrcode from "qrcode";
 import fs from "fs";
@@ -40,31 +39,33 @@ async function createSession(deviceId, io, phoneNumber = null) {
     keepAliveIntervalMs: 30000,
     printQRInTerminal: false,
     logger,
-    browser: Browsers.macOS("Desktop"),
+    browser: ["Ubuntu", "Chrome", "20.0.04"],
   });
 
   sessions.set(deviceId, sock);
 
+  if (phoneNumber && !sock.authState.creds.registered) {
+    setTimeout(async () => {
+      try {
+        const formattedNumber = formatWhatsAppNumber(phoneNumber);
+        let code = await sock.requestPairingCode(formattedNumber);
+        code = code?.match(/.{1,4}/g)?.join("-") || code;
+        io.emit("pairing_code", { deviceId, code });
+      } catch (err) {
+        console.error("Pairing code error:", err);
+      }
+    }, 3000);
+  }
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
-    if (qr) {
-      if (phoneNumber) {
-        try {
-          const formattedNumber = formatWhatsAppNumber(phoneNumber);
-          let code = await sock.requestPairingCode(formattedNumber);
-          code = code?.match(/.{1,4}/g)?.join("-") || code;
-          io.emit("pairing_code", { deviceId, code });
-        } catch (err) {
-          console.error("Pairing code error:", err);
-        }
-      } else {
-        try {
-          const url = await qrcode.toDataURL(qr);
-          io.emit("qr", { deviceId, url });
-        } catch (err) {
-          console.error("QR Generation Error:", err);
-        }
+    if (qr && !phoneNumber) {
+      try {
+        const url = await qrcode.toDataURL(qr);
+        io.emit("qr", { deviceId, url });
+      } catch (err) {
+        console.error("QR Generation Error:", err);
       }
     }
 
@@ -74,7 +75,7 @@ async function createSession(deviceId, io, phoneNumber = null) {
         DisconnectReason.loggedOut;
 
       console.log(
-        Connection closed for . Reconnecting: ,
+        `Connection closed for ${deviceId}. Reconnecting: ${shouldReconnect}`,
       );
 
       if (shouldReconnect) {
@@ -84,7 +85,7 @@ async function createSession(deviceId, io, phoneNumber = null) {
         removeSession(deviceId);
       }
     } else if (connection === "open") {
-      console.log(WhatsApp ready for device: );
+      console.log(`WhatsApp ready for device: ${deviceId}`);
       io.emit("ready", { deviceId });
     }
 
@@ -131,7 +132,7 @@ async function sendMessage(deviceId, to, message, imageUrl = null) {
   if (!sock) throw new Error("Session not found or not initialized");
 
   const formattedTo = formatWhatsAppNumber(to);
-  const jid = ${formattedTo}@s.whatsapp.net;
+  const jid = `${formattedTo}@s.whatsapp.net`;
 
   if (imageUrl) {
     return await sock.sendMessage(jid, {
@@ -166,6 +167,9 @@ async function removeSession(deviceId) {
 function getSessionStatus(deviceId) {
   const sock = sessions.get(deviceId);
   if (!sock) return { status: "disconnected" };
+  // Baileys socket doesn't have a simple isConnected property exposed this way easily without checking `ws`
+  // But if it's in the map, it's at least initialized.
+  // We can try to check user object or similar.
   return { status: "connected", user: sock.user };
 }
 
@@ -176,3 +180,6 @@ export {
   removeSession,
   getSessionStatus,
 };
+
+
+
