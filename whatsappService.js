@@ -38,7 +38,8 @@ async function createSession(deviceId, io, phoneNumber = null) {
   if (phoneNumber && !sock.authState.creds.registered) {
     setTimeout(async () => {
       try {
-        let code = await sock.requestPairingCode(phoneNumber);
+        const formattedNumber = phoneNumber.replace(/[^0-9]/g, "");
+        let code = await sock.requestPairingCode(formattedNumber);
         code = code?.match(/.{1,4}/g)?.join("-") || code;
         io.emit("pairing_code", { deviceId, code });
       } catch (err) {
