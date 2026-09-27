@@ -39,7 +39,7 @@ async function createSession(deviceId, io, phoneNumber = null) {
     keepAliveIntervalMs: 30000,
     printQRInTerminal: false,
     logger,
-    browser: ["WAF Service", "Chrome", "1.0.0"],
+    browser: ["Ubuntu", "Chrome", "20.0.04"],
   });
 
   sessions.set(deviceId, sock);
@@ -180,5 +180,6 @@ export {
   removeSession,
   getSessionStatus,
 };
+
 
 
