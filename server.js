@@ -32,6 +32,14 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("StartConnectionWithCode", async ({ deviceId, phoneNumber }) => {
+    try {
+      await whatsappService.createSession(deviceId, io, phoneNumber);
+    } catch (err) {
+      socket.emit("error", err.message);
+    }
+  });
+
   socket.on("LogoutDevice", async (deviceId) => {
     try {
       await whatsappService.removeSession(deviceId);

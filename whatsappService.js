@@ -16,7 +16,7 @@ const prisma = new PrismaClient();
 const sessions = new Map();
 const logger = pino({ level: "fatal" });
 
-async function createSession(deviceId, io) {
+async function createSession(deviceId, io, phoneNumber = null) {
   if (sessions.has(deviceId)) {
     io.emit("ready", { deviceId });
     return;
@@ -35,10 +35,22 @@ async function createSession(deviceId, io) {
 
   sessions.set(deviceId, sock);
 
+  if (phoneNumber && !sock.authState.creds.registered) {
+    setTimeout(async () => {
+      try {
+        let code = await sock.requestPairingCode(phoneNumber);
+        code = code?.match(/.{1,4}/g)?.join("-") || code;
+        io.emit("pairing_code", { deviceId, code });
+      } catch (err) {
+        console.error("Pairing code error:", err);
+      }
+    }, 3000);
+  }
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
-    if (qr) {
+    if (qr && !phoneNumber) {
       try {
         const url = await qrcode.toDataURL(qr);
         io.emit("qr", { deviceId, url });
@@ -58,7 +70,7 @@ async function createSession(deviceId, io) {
 
       if (shouldReconnect) {
         sessions.delete(deviceId);
-        createSession(deviceId, io);
+        createSession(deviceId, io, phoneNumber);
       } else {
         removeSession(deviceId);
       }
