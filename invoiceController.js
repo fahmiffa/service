@@ -1,0 +1,336 @@
+import { PrismaClient } from "@prisma/client";
+import * as whatsappService from "./whatsappService.js";
+const prisma = new PrismaClient();
+
+// GET all invoices (with optional period filter)
+const getAllInvoices = async (req, res) => {
+  try {
+    const { period } = req.query;
+    const where = period ? { period } : {};
+    const invoices = await prisma.invoice.findMany({
+      where,
+      include: { customer: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json(invoices);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// GET single invoice
+const getInvoiceById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: parseInt(id) },
+      include: { customer: true },
+    });
+    if (!invoice) {
+      return res.status(404).json({ message: "Invoice not found" });
+    }
+    res.json(invoice);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Generate monthly invoices for all customers
+const generateMonthlyInvoices = async (req, res) => {
+  try {
+    const { period } = req.body; // format period: "2026-02"
+    if (!period) {
+      return res
+        .status(400)
+        .json({ message: "Period is required (format: YYYY-MM)" });
+    }
+
+    const customers = await prisma.customer.findMany({
+      where: { amount: { gt: 0 } },
+    });
+
+    if (customers.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Tidak ada customer dengan tagihan" });
+    }
+
+    // Check if invoices already exist for this period
+    const existingInvoices = await prisma.invoice.findMany({
+      where: { period },
+    });
+    const existingCustomerIds = new Set(
+      existingInvoices.map((inv) => inv.customerId),
+    );
+
+    const newCustomers = customers.filter(
+      (c) => !existingCustomerIds.has(c.id),
+    );
+    if (newCustomers.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Invoice untuk periode ini sudah di-generate" });
+    }
+
+    // Generate invoice number: INV-YYYYMM-XXX
+    const periodShort = period.replace("-", "");
+    let counter = existingInvoices.length;
+
+    const invoices = [];
+    const [year, month] = period.split("-");
+
+    for (const customer of newCustomers) {
+      counter++;
+      const invoiceNo = `INV-${periodShort}-${String(counter).padStart(3, "0")}`;
+
+      // Calculate dueDate based on customer.dueDateDay and dueTime
+      const [hour, minute] = (customer.dueTime || "00:00")
+        .split(":")
+        .map(Number);
+      const dueDate = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        customer.dueDateDay || 10,
+        hour,
+        minute,
+      );
+
+      const invoice = await prisma.invoice.create({
+        data: {
+          invoiceNo,
+          customerId: customer.id,
+          amount: customer.amount,
+          period,
+          status: "unpaid",
+          dueDate,
+        },
+        include: { customer: true },
+      });
+      invoices.push(invoice);
+    }
+
+    res.status(201).json({
+      message: `${invoices.length} invoice berhasil di-generate`,
+      invoices,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Update invoice status
+const updateInvoiceStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const updateData = { status };
+    if (status === "paid") {
+      updateData.paidAt = new Date();
+    }
+
+    const invoice = await prisma.invoice.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+      include: { customer: true },
+    });
+
+    res.json({ message: "Status invoice berhasil diperbarui", invoice });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Delete invoice
+const deleteInvoice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.invoice.delete({ where: { id: parseInt(id) } });
+    res.json({ message: "Invoice berhasil dihapus" });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Format currency
+function formatRupiah(amount) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
+
+// Format period to readable month name
+function formatPeriod(period) {
+  const [year, month] = period.split("-");
+  const months = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
+  return `${months[parseInt(month) - 1]} ${year}`;
+}
+
+// Format date to local date string
+function formatDate(date) {
+  if (!date) return "-";
+  return new Date(date)
+    .toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+    .replace(/\./g, ":");
+}
+
+// Replace template variables
+function replaceTemplate(template, data) {
+  if (!template) {
+    return `📋 *INVOICE TAGIHAN*\n\nNo. Invoice: ${data.invoiceNo}\nNama: ${data.name}\nPeriode: ${data.period}\nJumlah: ${data.amount}\nJatuh Tempo: ${data.dueDate}\n\nMohon segera melakukan pembayaran.\nTerima kasih 🙏`;
+  }
+
+  return template
+    .replace(/{name}/g, data.name)
+    .replace(/{invoiceNo}/g, data.invoiceNo)
+    .replace(/{amount}/g, data.amount)
+    .replace(/{period}/g, data.period)
+    .replace(/{dueDate}/g, data.dueDate)
+    .replace(/{alamat}/g, data.alamat || "-");
+}
+
+// Send single invoice via WhatsApp
+const sendInvoiceWhatsApp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { sender } = req.body; // nomor WA pengirim (deviceId)
+
+    if (!sender) {
+      return res.status(400).json({ message: "Sender (nomor WA) diperlukan" });
+    }
+
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: parseInt(id) },
+      include: { customer: true },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ message: "Invoice not found" });
+    }
+
+    const messageData = {
+      invoiceNo: invoice.invoiceNo,
+      name: invoice.customer.name,
+      period: formatPeriod(invoice.period),
+      amount: formatRupiah(invoice.amount),
+      dueDate: formatDate(invoice.dueDate),
+      alamat: invoice.customer.alamat,
+    };
+
+    const message = replaceTemplate(
+      invoice.customer.messageTemplate,
+      messageData,
+    );
+
+    await prisma.outbox.create({
+      data: {
+        senderId: sender,
+        receiver: invoice.customer.hp,
+        message: message,
+        status: "draft",
+      },
+    });
+
+    await prisma.invoice.update({
+      where: { id: parseInt(id) },
+      data: { status: "sent", sentAt: new Date() },
+    });
+
+    res.json({ message: "Invoice queued in outbox" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Send all unpaid invoices via WhatsApp
+const sendAllPendingInvoices = async (req, res) => {
+  try {
+    const { sender, period } = req.body;
+
+    if (!sender) {
+      return res.status(400).json({ message: "Sender (nomor WA) diperlukan" });
+    }
+
+    const where = { status: { in: ["unpaid"] } };
+    if (period) where.period = period;
+
+    const invoices = await prisma.invoice.findMany({
+      where,
+      include: { customer: true },
+    });
+
+    if (invoices.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Tidak ada invoice yang perlu dikirim" });
+    }
+
+    const results = [];
+    for (const invoice of invoices) {
+      const messageData = {
+        invoiceNo: invoice.invoiceNo,
+        name: invoice.customer.name,
+        period: formatPeriod(invoice.period),
+        amount: formatRupiah(invoice.amount),
+        dueDate: formatDate(invoice.dueDate),
+        alamat: invoice.customer.alamat,
+      };
+
+      const message = replaceTemplate(
+        invoice.customer.messageTemplate,
+        messageData,
+      );
+
+      await prisma.outbox.create({
+        data: {
+          senderId: sender,
+          receiver: invoice.customer.hp,
+          message: message,
+          status: "draft",
+        },
+      });
+
+      await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: { status: "sent", sentAt: new Date() },
+      });
+    }
+
+    res.json({
+      message: `${invoices.length} invoices queued in outbox`,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export {
+  getAllInvoices,
+  getInvoiceById,
+  generateMonthlyInvoices,
+  updateInvoiceStatus,
+  deleteInvoice,
+  sendInvoiceWhatsApp,
+  sendAllPendingInvoices,
+};

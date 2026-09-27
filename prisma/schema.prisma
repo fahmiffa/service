@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  phone     String   @unique
+  role      Int      @default(1) // 0 = admin, 1 = user
+  status    Int      @default(1) // 1 = aktif, 2 = tidak aktif
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+model Customer {
+  id        Int       @id @default(autoincrement())
+  name      String
+  hp        String
+  alamat    String
+  amount    Float     @default(0)
+  invoices        Invoice[]
+  messageTemplate String?   @db.Text
+  dueDateDay      Int       @default(10)
+  dueTime         String?   @default("00:00")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Invoice {
+  id         Int       @id @default(autoincrement())
+  invoiceNo  String    @unique
+  customerId Int
+  customer   Customer  @relation(fields: [customerId], references: [id])
+  amount     Float
+  period     String
+  status     String    @default("unpaid")
+  sentAt     DateTime?
+  paidAt     DateTime?
+  dueDate    DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+model Bot {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  respons   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Outbox {
+  id          Int       @id @default(autoincrement())
+  senderId    String?   // deviceId / sender number
+  receiver    String
+  message     String    @db.Text
+  imageUrl    String?   @db.Text
+  status      String    @default("draft") // draft, success, failed
+  response    String?   @db.Text
+  scheduledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([receiver])
+}
+
