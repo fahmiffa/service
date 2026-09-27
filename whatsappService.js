@@ -74,7 +74,7 @@ async function createSession(deviceId, io, phoneNumber = null) {
         DisconnectReason.loggedOut;
 
       console.log(
-        Connection closed for . Reconnecting: ,
+        `Connection closed for ${deviceId}. Reconnecting: ${shouldReconnect}`,
       );
 
       if (shouldReconnect) {
@@ -84,7 +84,7 @@ async function createSession(deviceId, io, phoneNumber = null) {
         removeSession(deviceId);
       }
     } else if (connection === "open") {
-      console.log(WhatsApp ready for device: );
+      console.log(`WhatsApp ready for device: ${deviceId}`);
       io.emit("ready", { deviceId });
     }
 
@@ -131,7 +131,7 @@ async function sendMessage(deviceId, to, message, imageUrl = null) {
   if (!sock) throw new Error("Session not found or not initialized");
 
   const formattedTo = formatWhatsAppNumber(to);
-  const jid = ${formattedTo}@s.whatsapp.net;
+  const jid = `${formattedTo}@s.whatsapp.net`;
 
   if (imageUrl) {
     return await sock.sendMessage(jid, {
